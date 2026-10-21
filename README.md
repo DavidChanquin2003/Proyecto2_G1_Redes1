@@ -12,9 +12,9 @@
 
 <br>
 
-**Coordinador:** David Arturo Chanquin Velasquez | **Carnet:** 202300611 (Variable $xx = 11$)  
+**Coordinador:** David Arturo Chanquin Velasquez | **Carnet:** 202300611 (Variable xx = 11)  
 **Integrante:** Manuel Alejandro López Canel | **Carnet:** 202302035  
-**Grupo de Laboratorio:** Grupo 1 (Variable $Y = 1$)  
+**Grupo de Laboratorio:** Grupo 1 (Variable Y = 1)  
 **Docencia y Auxiliatura:** Aux. César Fernando Sazo Quisquinay  
 
 <br>
@@ -37,9 +37,9 @@ El presente proyecto implementa el diseño, dimensionamiento, despliegue y conve
 ### 1.2 Parámetros Algorítmicos de Identificación
 De conformidad con las especificaciones del diseño de red y las variables obligatorias asignadas:
 * **Bloque de Red Base Asignado:** `10.11.0.0/16`
-* **Variable $xx$ (Carnet Coordinador 202300611):** `11`  
+* **Variable xx (Carnet Coordinador 202300611):** `11`  
   * Determina el identificador de dominio VTP institucional: `bantech11`.
-* **Variable $Y$ (Último dígito del Grupo 1):** `1`  
+* **Variable Y (Último dígito del Grupo 1):** `1`  
   * Determina la nomenclatura base de las VLANs de sedes operativas:
     * Sede Occidente: VLAN 11, VLAN 21, VLAN 31, VLAN 41.
     * Sede Norte: VLAN 51, VLAN 61, VLAN 71.
@@ -59,13 +59,15 @@ De conformidad con las especificaciones del diseño de red y las variables oblig
 
 # 2. Justificación Técnica de Arquitectura por Sede y Backbone
 
-![topologia]()
+![topologia](img/topo.png)
 
 ### 2.1 Backbone Core (Núcleo Nacional Multiprotocolo)
 El Backbone Core conecta geográficamente todas las operaciones de BanTech GT. Está compuesto por tres enrutadores de alta capacidad (`Core1`, `Core2`, `Core3`) organizados en una topología de malla triangular heterogénea:
 * **Core1 - Core2:** Interconectados mediante interfaces de **Fibra Óptica** monomodo de baja latencia (`10.11.1.176/30`), garantizando alto rendimiento para el tráfico inter-regional más demandante.
 * **Core2 - Core3:** Interconectados mediante enlaces **GigabitEthernet** en cobre sobre cable par trenzado apantallado UTP Cat 6A (`10.11.1.180/30`).
 * **Core1 - Core3:** Conexión de contingencia WAN mediante interfaces síncronas **Seriales** punto a punto con modulación DCE/DTE (`10.11.1.184/30`), asegurando resiliencia ante cortes accidentales de ductos de fibra o conmutadores de capa física.
+
+![nucleo](img/core.png)
 
 #### Análisis Crítico de la Redistribución y Resolución del Conflicto de Distancia Administrativa (AD)
 La coexistencia de tres protocolos dinámicos con métricas y distancias administrativas heterogéneas requirió una ingeniería de tráfico avanzada en los nodos Core:
@@ -89,6 +91,8 @@ La Sede Occidente representa una agencia comercial de alta rotación de clientes
 * **Enrutamiento Inter-VLAN:** Implementa **Router-on-a-Stick (RoAS)** sobre el router `R-Occidente`, concentrando el tráfico a través del enlace troncal IEEE 802.1Q en la interfaz física `Gig0/0`, la cual aloja cuatro subinterfaces lógicas dedicadas (`.11`, `.21`, `.31` y `.41`).
 * **Gestión de Capa 2 (VTP):** Se configuró **VLAN Trunking Protocol (VTP)** para evitar inconsistencias en la base de datos de VLANs. El switch `SW-Occidente1` opera como **VTP Server** centralizando la creación de las VLANs 11, 21, 31 y 41, mientras que `SW-Occidente2` opera en modo **VTP Client**, sincronizando dinámicamente las bases de datos de red bajo el dominio corporativo `bantech11` y autenticación protegida con contraseña `cisco`.
 
+![occidente](img/occidente.png)
+
 ---
 
 ### 2.3 Sede Norte (Centro de Autorización de Créditos)
@@ -97,6 +101,8 @@ La Sede Norte alberga los departamentos de Análisis Financiero, Auditoría Regi
 * **Alta Disponibilidad de Capa 2 (Rapid PVST+):** A diferencia del STP clásico (802.1D) que requiere de 30 a 50 segundos para pasar de *Listening* a *Forwarding*, se implementó **Rapid PVST+ (IEEE 802.1w)**. Este mecanismo reduce el tiempo de reconvergencia a menos de un segundo gracias al intercambio continuo de BPDUs de propuesta/acuerdo (*handshake proposal/agreement*).
 * **Determinismo del Root Bridge:** Para optimizar el flujo de paquetes y evitar rutas de conmutación subóptimas, se configuró `SW-Norte1` como **Root Bridge Primario** para todas las VLANs (prioridad `4096`), ya que este equipo posee el enlace troncal directo hacia el router de borde `R-Norte`. Se forzó un puerto bloqueado en estado alterno (*Alternate/Blocking*) en la interfaz `FastEthernet0/24` de `SW-Norte3`, eliminando bucles de tormentas de difusión (*broadcast storms*) mientras se mantiene el enlace listo para activación instantánea ante una rotura física.
 * **Enrutamiento de Salida:** Se configuró **OSPFv2 en Área 0**, comunicándose con `Core1` para una convergencia de estado de enlace (*link-state*) basada en el algoritmo Dijkstra (SPF).
+
+![norte](img/norte.png)
 
 ---
 
@@ -109,6 +115,8 @@ La Sede Oriente procesa transacciones bancarias de alta criticidad en los depart
   * **VLAN 81 (Bóveda):** Gateway Virtual `10.11.0.193`. `MS1` opera como enrutador Activo (Prioridad `110`, con *preemption* activo); `MS2` opera como enrutador en Espera / Standby (Prioridad `100`).
   * **VLAN 91 (Plataforma):** Gateway Virtual `10.11.0.1`. `MS1` opera como Activo (Prioridad `110`, *preempt*); `MS2` opera como Standby (Prioridad `100`).
   * **Comportamiento de Failover y Failback:** Ante la falla total o desconexión de `MS1`, `MS2` detecta la ausencia de mensajes *Hello* de HSRP en 3 segundos (Holdtime 10s) y asume de inmediato el control del Gateway virtual (`10.11.0.193` / `10.11.0.1`). Cuando `MS1` se restablece, el parámetro `preempt` le permite retomar su rol de enrutador Activo de forma determinista y transparente.
+
+![oriente](img/oriente.png)
 
 ---
 
@@ -128,6 +136,8 @@ El Data Center corporativo concentra los servicios neurálgicos de BanTech GT: l
   * **Port-Channel 1:** Agrupa las interfaces `FastEthernet0/1` y `FastEthernet0/2` hacia `SW-DC-Acc1`.
   * **Port-Channel 2:** Agrupa las interfaces `FastEthernet0/3` y `FastEthernet0/4` hacia `SW-DC-Acc2`.
   * Ambos enlaces se negociaron bajo el estándar abierto **LACP en modo Active** (`channel-group X mode active`), balanceando la carga por dirección MAC/IP y garantizando que la rotura de un cable físico no degrade la conectividad del servidor ni genere cortes de sesión en las bases de datos.
+
+![central](img/central.png)
 
 ---
 
@@ -670,110 +680,79 @@ El siguiente plan de aseguramiento de calidad técnica y pruebas de laboratorio 
 ### Prueba 6.1: Validación de Topología General y Zonas Rotuladas
 Se comprueba el despliegue físico y lógico de todos los dispositivos, zonas perimetrales rotuladas y medios de transmisión asignados.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Vista general y completa de la topología en Cisco Packet Tracer mostrando todas las sedes rotuladas: Sede Occidente, Sede Norte, Sede Oriente, Data Center/Sede Central y el Backbone Core triangular con sus enlaces debidamente identificados.
-> * **Dispositivo / Terminal:** `Cisco Packet Tracer 8.x - Workspace Principal`
-> * **Criterio de Validación:** Confirmación visual de la estructura completa de 5 zonas, cableado heterogéneo y rotulación institucional con carnets y parámetros $xx = 11$, $Y = 1$.
+![topo](img/topo.png)
 
 ---
 
 ### Prueba 6.2: Tabla de Enrutamiento Global Convergida en `Core1` (24 Subredes)
 Verificación de la inyección de rutas mediante OSPF, EIGRP, RIPv2 y Rutas Estáticas redistribuidas. La tabla debe reflejar la totalidad de las 24 subredes calculadas en el diseño VLSM.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de la salida del comando `show ip route` en el router `Core1`, demostrando el aprendizaje completo de las 24 subredes (rutas directamente conectadas `C`, rutas locales `L`, rutas OSPF `O`, rutas EIGRP externas `D EX` provenientes de RIP y Estáticas).
-> * **Dispositivo / Terminal:** `Core1# show ip route`
-> * **Criterio de Validación:** Presencia exacta de las 24 subredes sin registros duplicados ni saltos inalcanzables, validando la redistribución bidireccional exitosa en el Backbone Core.
-
+![core1](img/core1.png)
 ---
 
 ### Prueba 6.3: Tablas de Enrutamiento en `Core2` y `Core3` (Ajuste de AD)
 Demostración de la efectividad del ajuste `distance 100` en RIP dentro de `Core2`, garantizando que la subred de Occidente se aprende directamente por RIP y no indirectamente por OSPF desde Core1.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Salida de `show ip route` en `Core2` evidenciando que las redes de Occidente (`10.11.0.128/26`, `10.11.1.0/27`, `10.11.1.128/28`, `10.11.1.144/28`) se encuentran instaladas vía RIP con distancia administrativa `100` (`[100/2]`), evitando bucles de enrutamiento con Core1.
-> * **Dispositivo / Terminal:** `Core2# show ip route`
-> * **Criterio de Validación:** Ausencia de bucles mutuos; las redes de Occidente apuntan exclusivamente a la interfaz `GigabitEthernet0/2` de `R-Occidente`.
+![core2](img/core2.png)
 
 ---
 
 ### Prueba 6.4: Agregación de Enlaces EtherChannel LACP en Data Center
 Inspección del estado de los canales lógicos `Port-Channel 1` y `Port-Channel 2` entre el switch de distribución `SW-DC1` y los switches de acceso de servidores.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Salida del comando `show etherchannel summary` en `SW-DC1` mostrando que `Po1` y `Po2` se encuentran en estado `(SU)` (Switch-port, in-Use) y que los puertos físicos miembros (`Fa0/1`, `Fa0/2`, `Fa0/3`, `Fa0/4`) presentan la bandera `(P)` (bundled in port-channel) negociados bajo protocolo LACP.
-> * **Dispositivo / Terminal:** `SW-DC1# show etherchannel summary`
-> * **Criterio de Validación:** Canal agregado activo y operativo en Capa 2 a 200 Mbps full-duplex por canal, asegurando balanceo y redundancia física.
+![LACP](img/LACP.png)
 
 ---
 
 ### Prueba 6.5: Estado Normal del Protocolo HSRP en Sede Oriente
 Verificación del funcionamiento en estado de reposo (*Steady State*) de HSRP en los conmutadores multicapa `MS1` y `MS2`.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Salidas simultáneas o secuenciales de `show standby brief` en `MS1` y `MS2`. En `MS1` debe mostrarse el rol `Active` para las VLANs 81 y 91 (prioridad 110, preempt habilitado), mientras que en `MS2` debe observarse el rol `Standby` (prioridad 100) con IPs virtuales `10.11.0.193` y `10.11.0.1`.
-> * **Dispositivo / Terminal:** `MS1# show standby brief` y `MS2# show standby brief`
-> * **Criterio de Validación:** Asignación correcta de roles maestro/respaldo y visualización correcta del Virtual IP (VIP) en ambos dispositivos.
+![HSRP](img/HSRP1.png)
+![HSRP](img/HSRP2.png)
 
 ---
 
 ### Prueba 6.6: Prueba de Tolerancia a Fallos (Failover) de HSRP en Sede Oriente
 Simulación de catástrofe o falla energética en el switch multicapa primario (`MS1`) apagando sus interfaces y verificando la conmutación automática de tráfico hacia `MS2`.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Ventana de consola de `MS2` mostrando el mensaje de Syslog `%%HSRP-5-STATECHANGE: Vlan81 Grp 81 state Standby -> Active` tras aplicar `shutdown` en las interfaces SVI de `MS1`, acompañado de una prueba de `ping` continuo ejecutada desde un host de Sede Oriente hacia un servidor del Data Center sin interrupción perceptible del servicio.
-> * **Dispositivo / Terminal:** `MS2# show standby brief` y `Terminal_Boveda1 Command Prompt: ping -t 10.11.1.114`
-> * **Criterio de Validación:** `MS2` toma el rol `Active` de forma transparente; la pérdida de paquetes durante la conmutación es igual o menor a 1 paquete ICMP.
+![failover](img/failover.png)
 
 ---
 
 ### Prueba 6.7: Prueba de Restauración Determinista (Failback con Preempt) en HSRP
 Comprobación de la reactivación del switch primario `MS1` y su recuperación inmediata del rol `Active` gracias al mecanismo de *preemption*.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Salida en consola de `MS1` tras ejecutar `no shutdown` en sus interfaces, registrando el mensaje de syslog de transición a `Active` y la subsecuente salida de `show standby brief` donde `MS1` retoma su rol prioritario.
-> * **Dispositivo / Terminal:** `MS1# show standby brief`
-> * **Criterio de Validación:** Preempt operativo al 100%, reestableciendo la topología óptima de diseño sin intervención manual adicional.
+![failback](img/failback.png)
 
 ---
 
 ### Prueba 6.8: Verificación del Árbol de Expansión Rapid PVST+ en Sede Norte
 Comprobación de la elección determinista de Root Bridge en `SW-Norte1` y la existencia de un puerto alterno bloqueado en `SW-Norte3` para prevenir bucles de conmutación.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de `show spanning-tree` en `SW-Norte1` mostrando la leyenda *"This bridge is the root"* para las VLANs 51, 61 y 71 con costo de ruta 0, junto con la salida de `show spanning-tree` en `SW-Norte3` mostrando la interfaz `Fa0/24` en estado `Altn BLK` (Alternate / Blocking).
-> * **Dispositivo / Terminal:** `SW-Norte1# show spanning-tree` y `SW-Norte3# show spanning-tree`
-> * **Criterio de Validación:** Protocolo `rstp` activo, elección correcta del puente raíz hacia el router de borde y prevención de bucles en la topología triangular.
+![rstp](img/rstp1.png)
+![rstp](img/rstp2.png)
 
 ---
 
 ### Prueba 6.9: Prueba de Ruptura de Enlace y Reconvergencia Inmediata en RSTP
 Simulación de corte de cable entre `SW-Norte1` y `SW-Norte2` en Sede Norte, evaluando el tiempo de desbloqueo de la interfaz de respaldo en `SW-Norte3`.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de pantalla que evidencie el estado de transición del puerto `Fa0/24` en `SW-Norte3` pasando instantáneamente a estado `FWD` (Forwarding) al desconectar el enlace primario, manteniendo la conectividad continua con el gateway `R-Norte`.
-> * **Dispositivo / Terminal:** `SW-Norte3# show spanning-tree`
-> * **Criterio de Validación:** Reconvergencia en menos de 1 segundo (0 paquetes perdidos en ICMP tras la caída del enlace físico directo).
+![rstp](img/rstp2.png)
 
 ---
 
 ### Prueba 6.10: Sincronización de Base de Datos VTP en Sede Occidente
 Comprobación de la replicación del dominio `bantech11` y la propagación de las VLANs creadas en el servidor hacia los conmutadores cliente.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Salidas de los comandos `show vtp status` y `show vlan brief` en `SW-Occidente2` (Client), mostrando la pertenencia al dominio `bantech11`, número de revisión de configuración actualizado y la existencia automática de las VLANs 11, 21, 31 y 41 sin haber sido creadas localmente.
-> * **Dispositivo / Terminal:** `SW-Occidente2# show vtp status` y `SW-Occidente2# show vlan brief`
-> * **Criterio de Validación:** Modo de operación Client verificado y sincronización consistente de todas las VLANs regionales.
+![vtp](img/vtp.png)
+![vlanbrief](img/vlanbrief.png)
 
 ---
 
 ### Prueba 6.11: Aislamiento Perimetral y Redistribución Estática en Data Center
 Verificación del esquema de enrutamiento estático en los enrutadores de frontera del centro de datos.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Salida de `show ip route` en `R-Central2` mostrando la ruta por defecto `S* 0.0.0.0/0 [1/0] via 10.11.1.205`, y salida de `show ip route static` en `R-Central1` confirmando las 3 rutas específicas hacia `Core_BD`, `Web_Apps` y `NOC` vía `10.11.1.206`.
-> * **Dispositivo / Terminal:** `R-Central2# show ip route` y `R-Central1# show ip route static`
-> * **Criterio de Validación:** Demostración de que la zona interna de servidores no ejecuta protocolos de enrutamiento dinámico externos, asegurando el aislamiento y seguridad requeridos por la rúbrica.
+![show ip route](img/iproute.png)
 
 ---
 
@@ -785,10 +764,7 @@ Pruebas exhaustivas de comunicación cruzada inter-regional y acceso hacia los r
 * **Destino:** `Server_BD_Master` (`10.11.1.114`, VLAN 12)  
 * **Flujo Transaccional:** `PC-Caja1` $\rightarrow$ `SW-Occidente1` $\rightarrow$ `R-Occidente` $\rightarrow$ `Core2` $\rightarrow$ `Core3` $\rightarrow$ `R-Central1` $\rightarrow$ `R-Central2` $\rightarrow$ `SW-DC1` $\rightarrow$ `SW-DC-Acc1` $\rightarrow$ `Server_BD_Master`.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de consola ejecutando `ping 10.11.1.114` desde `PC-Caja1` con respuesta exitosa (*Reply from 10.11.1.114: bytes=32 time<1ms TTL=122*), seguido de un `tracert 10.11.1.114` mostrando cada uno de los saltos intermedios a través del Core.
-> * **Dispositivo / Terminal:** `PC-Caja1 Command Prompt: ping 10.11.1.114`
-> * **Criterio de Validación:** 100% de éxito en la prueba ICMP ($4/4$), confirmando la ruta transaccional más crítica del banco.
+![ping](img/ping1.png)
 
 ---
 
@@ -797,10 +773,7 @@ Pruebas exhaustivas de comunicación cruzada inter-regional y acceso hacia los r
 * **Destino:** `Server_Portal_Web` (`10.11.1.34`, VLAN 22)  
 * **Flujo Transaccional:** `PC-Analista1` $\rightarrow$ `SW-Norte1` $\rightarrow$ `R-Norte` $\rightarrow$ `Core1` $\rightarrow$ `Core3` $\rightarrow$ `R-Central1` $\rightarrow$ `R-Central2` $\rightarrow$ `Server_Portal_Web`.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de consola ejecutando `ping 10.11.1.34` desde `PC-Analista1` en Sede Norte hacia el servidor Web Apps del Data Center con éxito total.
-> * **Dispositivo / Terminal:** `PC-Analista1 Command Prompt: ping 10.11.1.34`
-> * **Criterio de Validación:** Conectividad inter-regional OSPF-EIGRP convergida y operativa.
+![ping](img/ping2.png)
 
 ---
 
@@ -809,10 +782,7 @@ Pruebas exhaustivas de comunicación cruzada inter-regional y acceso hacia los r
 * **Destino:** `Laptop-Gerente` (`10.11.1.146`, VLAN 31)  
 * **Flujo Transaccional:** `Terminal_Boveda1` $\rightarrow$ `MS1 (HSRP Gateway)` $\rightarrow$ `Core1` $\rightarrow$ `Core2` $\rightarrow$ `R-Occidente` $\rightarrow$ `Laptop-Gerente`.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de pantalla de `ping 10.11.1.146` desde `Terminal_Boveda1` en Sede Oriente hacia la máquina de Gerencia en Sede Occidente.
-> * **Dispositivo / Terminal:** `Terminal_Boveda1 Command Prompt: ping 10.11.1.146`
-> * **Criterio de Validación:** Comunicación cruzada entre switches multicapa y router-on-a-stick a través del backbone heterogéneo.
+![ping](img/ping3.png)
 
 ---
 
@@ -821,10 +791,7 @@ Pruebas exhaustivas de comunicación cruzada inter-regional y acceso hacia los r
 * **Destino:** `PC-Auditor1` (`10.11.1.66`, VLAN 61)  
 * **Flujo Transaccional:** `PC-Operador1` $\rightarrow$ `MS1 (HSRP Gateway)` $\rightarrow$ `Core1` $\rightarrow$ `R-Norte` $\rightarrow$ `PC-Auditor1`.
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de pantalla de `ping 10.11.1.66` ejecutado desde `PC-Operador1` hacia `PC-Auditor1` validando el enlace de auditoría inter-agencias.
-> * **Dispositivo / Terminal:** `PC-Operador1 Command Prompt: ping 10.11.1.66`
-> * **Criterio de Validación:** Tráfico bidireccional fluido entre EIGRP AS 10 y OSPF Área 0 vía `Core1`.
+![ping](img/ping4.png)
 
 ---
 
@@ -832,10 +799,10 @@ Pruebas exhaustivas de comunicación cruzada inter-regional y acceso hacia los r
 * **Origen:** `NOC_Console_01` (`10.11.1.162`, VLAN 32)  
 * **Destinos:** Gateways `10.11.0.129` (Occidente), `10.11.0.65` (Norte), `10.11.0.1` (Oriente VIP), `10.11.1.177` (Core1).
 
-> **[INSERTAR CAPTURA AQUÍ]**
-> * **Descripción:** Captura de consola en la terminal del NOC ejecutando pruebas ping hacia los cuatro gateways remotos, evidenciando capacidad de gestión, monitoreo y telemetría centralizada desde el Data Center.
-> * **Dispositivo / Terminal:** `NOC_Console_01 Command Prompt: ping a gateways de red`
-> * **Criterio de Validación:** Capacidad total de gestión de infraestructura desde el puesto central de operaciones de red.
+![ping](img/ping5.png)
+![ping](img/ping6.png)
+![ping](img/ping7.png)
+![ping](img/ping8.png)
 
 ---
 
